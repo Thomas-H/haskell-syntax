@@ -130,18 +130,18 @@ Special Ids
 -----------------------------------------------------------------------------
 Module Header
 
-> module :: { HsModule }
+> module :: { Module }
 >       : srcloc 'module' modid maybeexports 'where' body
->               { HsModule $1 $3 $4 (fst $6) (snd $6) }
+>               { Module $1 $3 $4 (fst $6) (snd $6) }
 >       | srcloc body
->               { HsModule $1 main_mod (Just [HsEVar (UnQual main_name)])
+>               { Module $1 main_mod (Just [EVar (UnQual main_name)])
 >                                                       (fst $2) (snd $2) }
 
-> body :: { ([HsImportDecl],[HsDecl]) }
+> body :: { ([ImportDecl],[Decl]) }
 >       : '{'  bodyaux '}'                      { $2 }
 >       | open bodyaux close                    { $2 }
 
-> bodyaux :: { ([HsImportDecl],[HsDecl]) }
+> bodyaux :: { ([ImportDecl],[Decl]) }
 >       : optsemis impdecls semis topdecls      { (reverse $2, $4) }
 >       | optsemis                topdecls      { ([], $2) }
 >       | optsemis impdecls optsemis            { (reverse $2, []) }
@@ -157,11 +157,11 @@ Module Header
 -----------------------------------------------------------------------------
 The Export List
 
-> maybeexports :: { Maybe [HsExportSpec] }
+> maybeexports :: { Maybe [ExportSpec] }
 >       :  exports                              { Just $1 }
 >       |  {- empty -}                          { Nothing }
 
-> exports :: { [HsExportSpec] }
+> exports :: { [ExportSpec] }
 >       : '(' exportlist optcomma ')'           { reverse $2 }
 >       | '(' optcomma ')'                      { [] }
 
@@ -169,43 +169,43 @@ The Export List
 >       : ','                                   { () }
 >       | {- empty -}                           { () }
 
-> exportlist :: { [HsExportSpec] }
+> exportlist :: { [ExportSpec] }
 >       :  exportlist ',' export                { $3 : $1 }
 >       |  export                               { [$1]  }
 
-> export :: { HsExportSpec }
->       :  qvar                                 { HsEVar $1 }
->       |  qtyconorcls                          { HsEAbs $1 }
->       |  qtyconorcls '(' '..' ')'             { HsEThingAll $1 }
->       |  qtyconorcls '(' ')'                  { HsEThingWith $1 [] }
->       |  qtyconorcls '(' cnames ')'           { HsEThingWith $1 (reverse $3) }
->       |  'module' modid                       { HsEModuleContents $2 }
+> export :: { ExportSpec }
+>       :  qvar                                 { EVar $1 }
+>       |  qtyconorcls                          { EAbs $1 }
+>       |  qtyconorcls '(' '..' ')'             { EThingAll $1 }
+>       |  qtyconorcls '(' ')'                  { EThingWith $1 [] }
+>       |  qtyconorcls '(' cnames ')'           { EThingWith $1 (reverse $3) }
+>       |  'module' modid                       { EModuleContents $2 }
 
 -----------------------------------------------------------------------------
 Import Declarations
 
-> impdecls :: { [HsImportDecl] }
+> impdecls :: { [ImportDecl] }
 >       : impdecls semis impdecl                { $3 : $1 }
 >       | impdecl                               { [$1] }
 
-> impdecl :: { HsImportDecl }
+> impdecl :: { ImportDecl }
 >       : srcloc 'import' optqualified modid maybeas maybeimpspec
->                               { HsImportDecl $1 $4 $3 $5 $6 }
+>                               { ImportDecl $1 $4 $3 $5 $6 }
 
 > optqualified :: { Bool }
 >       : 'qualified'                           { True  }
 >       | {- empty -}                           { False }
 
-> maybeas :: { Maybe Module }
+> maybeas :: { Maybe ModuleName }
 >       : 'as' modid                            { Just $2 }
 >       | {- empty -}                           { Nothing }
 
 
-> maybeimpspec :: { Maybe (Bool, [HsImportSpec]) }
+> maybeimpspec :: { Maybe (Bool, [ImportSpec]) }
 >       : impspec                               { Just $1 }
 >       | {- empty -}                           { Nothing }
 
-> impspec :: { (Bool, [HsImportSpec]) }
+> impspec :: { (Bool, [ImportSpec]) }
 >       : opthiding '(' importlist optcomma ')' { ($1, reverse $3) }
 >       | opthiding '(' optcomma ')'            { ($1, []) }
 
@@ -213,41 +213,41 @@ Import Declarations
 >       : 'hiding'                              { True }
 >       | {- empty -}                           { False }
 
-> importlist :: { [HsImportSpec] }
+> importlist :: { [ImportSpec] }
 >       :  importlist ',' importspec            { $3 : $1 }
 >       |  importspec                           { [$1]  }
 
-> importspec :: { HsImportSpec }
->       :  var                                  { HsIVar $1 }
->       |  tyconorcls                           { HsIAbs $1 }
->       |  tyconorcls '(' '..' ')'              { HsIThingAll $1 }
->       |  tyconorcls '(' ')'                   { HsIThingWith $1 [] }
->       |  tyconorcls '(' cnames ')'            { HsIThingWith $1 (reverse $3) }
+> importspec :: { ImportSpec }
+>       :  var                                  { IVar $1 }
+>       |  tyconorcls                           { IAbs $1 }
+>       |  tyconorcls '(' '..' ')'              { IThingAll $1 }
+>       |  tyconorcls '(' ')'                   { IThingWith $1 [] }
+>       |  tyconorcls '(' cnames ')'            { IThingWith $1 (reverse $3) }
 
-> cnames :: { [HsCName] }
+> cnames :: { [CName] }
 >       :  cnames ',' cname                     { $3 : $1 }
 >       |  cname                                { [$1]  }
 
-> cname :: { HsCName }
->       :  var                                  { HsVarName $1 }
->       |  con                                  { HsConName $1 }
+> cname :: { CName }
+>       :  var                                  { VarName $1 }
+>       |  con                                  { ConName $1 }
 
 -----------------------------------------------------------------------------
 Fixity Declarations
 
-> fixdecl :: { HsDecl }
->       : srcloc infix prec ops                 { HsInfixDecl $1 $2 $3 (reverse $4) }
+> fixdecl :: { Decl }
+>       : srcloc infix prec ops                 { InfixDecl $1 $2 $3 (reverse $4) }
 
 > prec :: { Int }
 >       : {- empty -}                           { 9 }
 >       | INT                                   {% checkPrec $1 }
 
-> infix :: { HsAssoc }
->       : 'infix'                               { HsAssocNone  }
->       | 'infixl'                              { HsAssocLeft  }
->       | 'infixr'                              { HsAssocRight }
+> infix :: { Assoc }
+>       : 'infix'                               { AssocNone  }
+>       | 'infixl'                              { AssocLeft  }
+>       | 'infixr'                              { AssocRight }
 
-> ops   :: { [HsOp] }
+> ops   :: { [Op] }
 >       : ops ',' op                            { $3 : $1 }
 >       | op                                    { [$1] }
 
@@ -257,57 +257,57 @@ Top-Level Declarations
 Note: The report allows topdecls to be empty. This would result in another
 shift/reduce-conflict, so we don't handle this case here, but in bodyaux.
 
-> topdecls :: { [HsDecl] }
+> topdecls :: { [Decl] }
 >       : topdecls1 optsemis            {% checkRevDecls $1 }
 
-> topdecls1 :: { [HsDecl] }
+> topdecls1 :: { [Decl] }
 >       : topdecls1 semis topdecl       { $3 : $1 }
 >       | topdecl                       { [$1] }
 
-> topdecl :: { HsDecl }
+> topdecl :: { Decl }
 >       : srcloc 'type' simpletype '=' type
->                       { HsTypeDecl $1 (fst $3) (snd $3) $5 }
+>                       { TypeDecl $1 (fst $3) (snd $3) $5 }
 >       | srcloc 'data' ctype '=' constrs deriving
 >                       {% do { (cs,c,t) <- checkDataHeader $3;
->                               return (HsDataDecl $1 cs c t (reverse $5) $6) } }
+>                               return (DataDecl $1 cs c t (reverse $5) $6) } }
 >       | srcloc 'newtype' ctype '=' constr deriving
 >                       {% do { (cs,c,t) <- checkDataHeader $3;
->                               return (HsNewTypeDecl $1 cs c t $5 $6) } }
+>                               return (NewTypeDecl $1 cs c t $5 $6) } }
 >       | srcloc 'class' ctype optcbody
 >                       {% do { (cs,c,vs) <- checkClassHeader $3;
->                               return (HsClassDecl $1 cs c vs $4) } }
+>                               return (ClassDecl $1 cs c vs $4) } }
 >       | srcloc 'instance' ctype optvaldefs
 >                       {% do { (cs,c,ts) <- checkInstHeader $3;
->                               return (HsInstDecl $1 cs c ts $4) } }
+>                               return (InstDecl $1 cs c ts $4) } }
 >       | srcloc 'default' '(' typelist ')'
->                       { HsDefaultDecl $1 $4 }
+>                       { DefaultDecl $1 $4 }
 >       | foreigndecl   { $1 }
 >       | decl          { $1 }
 
-> typelist :: { [HsType] }
+> typelist :: { [Type] }
 >       : types                         { reverse $1 }
 >       | type                          { [$1] }
 >       | {- empty -}                   { [] }
 
-> decls :: { [HsDecl] }
+> decls :: { [Decl] }
 >       : optsemis decls1 optsemis      {% checkRevDecls $2 }
 >       | optsemis                      { [] }
 
-> decls1 :: { [HsDecl] }
+> decls1 :: { [Decl] }
 >       : decls1 semis decl             { $3 : $1 }
 >       | decl                          { [$1] }
 
-> decl :: { HsDecl }
+> decl :: { Decl }
 >       : signdecl                      { $1 }
 >       | fixdecl                       { $1 }
 >       | valdef                        { $1 }
 
-> decllist :: { [HsDecl] }
+> decllist :: { [Decl] }
 >       : '{'  decls '}'                { $2 }
 >       | open decls close              { $2 }
 
-> signdecl :: { HsDecl }
->       : srcloc vars '::' ctype        { HsTypeSig $1 (reverse $2) $4 }
+> signdecl :: { Decl }
+>       : srcloc vars '::' ctype        { TypeSig $1 (reverse $2) $4 }
 
 ATTENTION: Dirty Hackery Ahead! If the second alternative of vars is var
 instead of qvar, we get another shift/reduce-conflict. Consider the
@@ -320,7 +320,7 @@ We re-use expressions for patterns, so a qvar would be allowed in patterns
 instead of a var only (which would be correct). But deciding what the + is,
 would require more lookahead. So let's check for ourselves...
 
-> vars  :: { [HsName] }
+> vars  :: { [Name] }
 >       : vars ',' var                  { $3 : $1 }
 >       | qvar                          {% do { n <- checkUnQual $1;
 >                                               return [n] } }
@@ -330,44 +330,44 @@ Foreign declarations
 - external entities are not parsed
 - special ids are not allowed as internal names
 
-> foreigndecl :: { HsDecl }
+> foreigndecl :: { Decl }
 >       : srcloc 'foreign' 'import' VARID optsafety optentity fvar '::' type
->                       { HsForeignImport $1 $4 $5 $6 $7 $9 }
+>                       { ForeignImport $1 $4 $5 $6 $7 $9 }
 >       | srcloc 'foreign' 'export' VARID optentity fvar '::' type
->                       { HsForeignExport $1 $4 $5 $6 $8 }
+>                       { ForeignExport $1 $4 $5 $6 $8 }
 
-> optsafety :: { HsSafety }
->       : 'safe'                        { HsSafe }
->       | 'unsafe'                      { HsUnsafe }
->       | {- empty -}                   { HsSafe }
+> optsafety :: { Safety }
+>       : 'safe'                        { Safe }
+>       | 'unsafe'                      { Unsafe }
+>       | {- empty -}                   { Safe }
 
 > optentity :: { String }
 >       : STRING                        { $1 }
 >       | {- empty -}                   { "" }
 
-> fvar :: { HsName }
->       : VARID                         { HsIdent $1 }
+> fvar :: { Name }
+>       : VARID                         { Ident $1 }
 >       | '(' varsym ')'                { $2 }
 
 -----------------------------------------------------------------------------
 Types
 
-> type :: { HsType }
->       : btype '->' type               { HsTyFun $1 $3 }
+> type :: { Type }
+>       : btype '->' type               { TyFun $1 $3 }
 >       | btype                         { $1 }
 
-> btype :: { HsType }
->       : btype atype                   { HsTyApp $1 $2 }
+> btype :: { Type }
+>       : btype atype                   { TyApp $1 $2 }
 >       | atype                         { $1 }
 
-> atype :: { HsType }
->       : gtycon                        { HsTyCon $1 }
->       | tyvar                         { HsTyVar $1 }
->       | '(' types ')'                 { HsTyTuple (reverse $2) }
->       | '[' type ']'                  { HsTyApp list_tycon $2 }
+> atype :: { Type }
+>       : gtycon                        { TyCon $1 }
+>       | tyvar                         { TyVar $1 }
+>       | '(' types ')'                 { TyTuple (reverse $2) }
+>       | '[' type ']'                  { TyApp list_tycon $2 }
 >       | '(' type ')'                  { $2 }
 
-> gtycon :: { HsQName }
+> gtycon :: { QName }
 >       : qconid                        { $1 }
 >       | '(' ')'                       { unit_tycon_name }
 >       | '(' '->' ')'                  { fun_tycon_name }
@@ -385,123 +385,123 @@ with one token of lookahead.  The HACK is to parse the context as a btype
 (more specifically as a tuple type), then check that it has the right form
 C a, or (C1 a, C2 b, ... Cn z) and convert it into a context.  Blaach!
 
-> ctype :: { HsQualType }
->       : context '=>' type             { HsQualType $1 $3 }
->       | type                          { HsQualType [] $1 }
+> ctype :: { QualType }
+>       : context '=>' type             { QualType $1 $3 }
+>       | type                          { QualType [] $1 }
 
-> context :: { HsContext }
+> context :: { Context }
 >       : btype                         {% checkContext $1 }
 
-> types :: { [HsType] }
+> types :: { [Type] }
 >       : types ',' type                { $3 : $1 }
 >       | type  ',' type                { [$3, $1] }
 
-> simpletype :: { (HsName, [HsName]) }
+> simpletype :: { (Name, [Name]) }
 >       : tycon tyvars                  { ($1,reverse $2) }
 
-> tyvars :: { [HsName] }
+> tyvars :: { [Name] }
 >       : tyvars tyvar                  { $2 : $1 }
 >       | {- empty -}                   { [] }
 
 -----------------------------------------------------------------------------
 Datatype declarations
 
-> constrs :: { [HsConDecl] }
+> constrs :: { [ConDecl] }
 >       : constrs '|' constr            { $3 : $1 }
 >       | constr                        { [$1] }
 
-> constr :: { HsConDecl }
->       : srcloc scontype               { HsConDecl $1 (fst $2) (snd $2) }
->       | srcloc sbtype conop sbtype    { HsConDecl $1 $3 [$2,$4] }
->       | srcloc con '{' '}'            { HsRecDecl $1 $2 [] }
->       | srcloc con '{' fielddecls '}' { HsRecDecl $1 $2 (reverse $4) }
+> constr :: { ConDecl }
+>       : srcloc scontype               { ConDecl $1 (fst $2) (snd $2) }
+>       | srcloc sbtype conop sbtype    { ConDecl $1 $3 [$2,$4] }
+>       | srcloc con '{' '}'            { RecDecl $1 $2 [] }
+>       | srcloc con '{' fielddecls '}' { RecDecl $1 $2 (reverse $4) }
 
-> scontype :: { (HsName, [HsBangType]) }
+> scontype :: { (Name, [BangType]) }
 >       : btype                         {% do { (c,ts) <- splitTyConApp $1;
->                                               return (c,map HsUnBangedTy ts) } }
+>                                               return (c,map UnBangedTy ts) } }
 >       | scontype1                     { $1 }
 
-> scontype1 :: { (HsName, [HsBangType]) }
+> scontype1 :: { (Name, [BangType]) }
 >       : btype '!' atype               {% do { (c,ts) <- splitTyConApp $1;
->                                               return (c,map HsUnBangedTy ts++
->                                                       [HsBangedTy $3]) } }
+>                                               return (c,map UnBangedTy ts++
+>                                                       [BangedTy $3]) } }
 >       | scontype1 satype              { (fst $1, snd $1 ++ [$2] ) }
 
-> satype :: { HsBangType }
->       : atype                         { HsUnBangedTy $1 }
->       | '!' atype                     { HsBangedTy   $2 }
+> satype :: { BangType }
+>       : atype                         { UnBangedTy $1 }
+>       | '!' atype                     { BangedTy   $2 }
 
-> sbtype :: { HsBangType }
->       : btype                         { HsUnBangedTy $1 }
->       | '!' atype                     { HsBangedTy   $2 }
+> sbtype :: { BangType }
+>       : btype                         { UnBangedTy $1 }
+>       | '!' atype                     { BangedTy   $2 }
 
-> fielddecls :: { [([HsName],HsBangType)] }
+> fielddecls :: { [([Name],BangType)] }
 >       : fielddecls ',' fielddecl      { $3 : $1 }
 >       | fielddecl                     { [$1] }
 
-> fielddecl :: { ([HsName],HsBangType) }
+> fielddecl :: { ([Name],BangType) }
 >       : vars '::' stype               { (reverse $1, $3) }
 
-> stype :: { HsBangType }
->       : type                          { HsUnBangedTy $1 }
->       | '!' atype                     { HsBangedTy   $2 }
+> stype :: { BangType }
+>       : type                          { UnBangedTy $1 }
+>       | '!' atype                     { BangedTy   $2 }
 
-> deriving :: { [HsQName] }
+> deriving :: { [QName] }
 >       : {- empty -}                   { [] }
 >       | 'deriving' qtycls             { [$2] }
 >       | 'deriving' '('          ')'   { [] }
 >       | 'deriving' '(' dclasses ')'   { reverse $3 }
 
-> dclasses :: { [HsQName] }
+> dclasses :: { [QName] }
 >       : dclasses ',' qtycls           { $3 : $1 }
 >       | qtycls                        { [$1] }
 
 -----------------------------------------------------------------------------
 Class declarations
 
-> optcbody :: { [HsDecl] }
+> optcbody :: { [Decl] }
 >       : 'where' decllist              {% checkClassBody $2 }
 >       | {- empty -}                   { [] }
 
 -----------------------------------------------------------------------------
 Instance declarations
 
-> optvaldefs :: { [HsDecl] }
+> optvaldefs :: { [Decl] }
 >       : 'where' '{'  valdefs '}'      {% checkClassBody $3 }
 >       | 'where' open valdefs close    {% checkClassBody $3 }
 >       | {- empty -}                   { [] }
 
-> valdefs :: { [HsDecl] }
+> valdefs :: { [Decl] }
 >       : optsemis valdefs1 optsemis    {% checkRevDecls $2 }
 >       | optsemis                      { [] }
 
-> valdefs1 :: { [HsDecl] }
+> valdefs1 :: { [Decl] }
 >       : valdefs1 semis valdef         { $3 : $1 }
 >       | valdef                        { [$1] }
 
 -----------------------------------------------------------------------------
 Value definitions
 
-> valdef :: { HsDecl }
+> valdef :: { Decl }
 >       : srcloc exp0b rhs optwhere     {% checkValDef $1 $2 $3 $4 }
 
-> optwhere :: { [HsDecl] }
+> optwhere :: { [Decl] }
 >       : 'where' decllist              { $2 }
 >       | {- empty -}                   { [] }
 
-> rhs   :: { HsRhs }
+> rhs   :: { Rhs }
 >       : '=' exp                       {% do { e <- checkExpr $2;
->                                               return (HsUnGuardedRhs e) } }
->       | gdrhs                         { HsGuardedRhss  (reverse $1) }
+>                                               return (UnGuardedRhs e) } }
+>       | gdrhs                         { GuardedRhss  (reverse $1) }
 
-> gdrhs :: { [HsGuardedRhs] }
+> gdrhs :: { [GuardedRhs] }
 >       : gdrhs gdrh                    { $2 : $1 }
 >       | gdrh                          { [$1] }
 
-> gdrh :: { HsGuardedRhs }
+> gdrh :: { GuardedRhs }
 >       : srcloc '|' exp0 '=' exp       {% do { g <- checkExpr $3;
 >                                               e <- checkExpr $5;
->                                               return (HsGuardedRhs $1 g e) } }
+>                                               return (GuardedRhs $1 g e) } }
 
 -----------------------------------------------------------------------------
 Expressions
@@ -515,42 +515,42 @@ conflicts, we split exp10 into these expressions (exp10a) and the others
 can followed by a type signature or infix application.  So we duplicate
 the exp0 productions to distinguish these from the others (exp0a).
 
-> exp   :: { HsExp }
->       : exp0b '::' srcloc ctype       { HsExpTypeSig $3 $1 $4 }
+> exp   :: { Exp }
+>       : exp0b '::' srcloc ctype       { ExpTypeSig $3 $1 $4 }
 >       | exp0                          { $1 }
 
-> exp0 :: { HsExp }
+> exp0 :: { Exp }
 >       : exp0a                         { $1 }
 >       | exp0b                         { $1 }
 
-> exp0a :: { HsExp }
->       : exp0b qop exp10a              { HsInfixApp $1 $2 $3 }
+> exp0a :: { Exp }
+>       : exp0b qop exp10a              { InfixApp $1 $2 $3 }
 >       | exp10a                        { $1 }
 
-> exp0b :: { HsExp }
->       : exp0b qop exp10b              { HsInfixApp $1 $2 $3 }
+> exp0b :: { Exp }
+>       : exp0b qop exp10b              { InfixApp $1 $2 $3 }
 >       | exp10b                        { $1 }
 
-> exp10a :: { HsExp }
->       : '\\' srcloc apats '->' exp    { HsLambda $2 (reverse $3) $5 }
->       | 'let' decllist 'in' exp       { HsLet $2 $4 }
->       | 'if' exp 'then' exp 'else' exp { HsIf $2 $4 $6 }
+> exp10a :: { Exp }
+>       : '\\' srcloc apats '->' exp    { Lambda $2 (reverse $3) $5 }
+>       | 'let' decllist 'in' exp       { Let $2 $4 }
+>       | 'if' exp 'then' exp 'else' exp { If $2 $4 $6 }
 
-> exp10b :: { HsExp }
->       : 'case' exp 'of' altslist      { HsCase $2 $4 }
->       | '-' fexp                      { HsNegApp $2 }
->       | 'do' stmtlist                 { HsDo $2 }
+> exp10b :: { Exp }
+>       : 'case' exp 'of' altslist      { Case $2 $4 }
+>       | '-' fexp                      { NegApp $2 }
+>       | 'do' stmtlist                 { Do $2 }
 >       | fexp                          { $1 }
 
-> fexp :: { HsExp }
->       : fexp aexp                     { HsApp $1 $2 }
+> fexp :: { Exp }
+>       : fexp aexp                     { App $1 $2 }
 >       | aexp                          { $1 }
 
-> apats :: { [HsPat] }
+> apats :: { [Pat] }
 >       : apats apat                    { $2 : $1 }
 >       | apat                          { [$1] }
 
-> apat :: { HsPat }
+> apat :: { Pat }
 >       : aexp                          {% checkPattern $1 }
 
 UGLY: Because patterns and expressions are mixed, aexp has to be split into
@@ -561,16 +561,16 @@ Even though the variable in an as-pattern cannot be qualified, we use
 qvar here to avoid a shift/reduce conflict, and then check it ourselves
 (as for vars above).
 
-> aexp  :: { HsExp }
+> aexp  :: { Exp }
 >       : qvar '@' aexp                 {% do { n <- checkUnQual $1;
->                                               return (HsAsPat n $3) } }
->       | '~' aexp                      { HsIrrPat $2 }
+>                                               return (AsPat n $3) } }
+>       | '~' aexp                      { IrrPat $2 }
 >       | aexp1                         { $1 }
 
 Note: The first two alternatives of aexp1 are not necessarily record
 updates: they could be labeled constructions.
 
-> aexp1 :: { HsExp }
+> aexp1 :: { Exp }
 >       : aexp1 '{' '}'                 {% mkRecConstrOrUpdate $1 [] }
 >       | aexp1 '{' fbinds '}'          {% mkRecConstrOrUpdate $1 (reverse $3) }
 >       | aexp2                         { $1 }
@@ -578,22 +578,22 @@ updates: they could be labeled constructions.
 According to the Report, the left section (e op) is legal iff (e op x)
 parses equivalently to ((e) op x).  Thus e must be an exp0b.
 
-> aexp2 :: { HsExp }
->       : qvar                          { HsVar $1 }
+> aexp2 :: { Exp }
+>       : qvar                          { Var $1 }
 >       | gcon                          { $1 }
->       | literal                       { HsLit $1 }
->       | '(' exp ')'                   { HsParen $2 }
->       | '(' texps ')'                 { HsTuple (reverse $2) }
+>       | literal                       { Lit $1 }
+>       | '(' exp ')'                   { Paren $2 }
+>       | '(' texps ')'                 { Tuple (reverse $2) }
 >       | '[' list ']'                  { $2 }
->       | '(' exp0b qop ')'             { HsLeftSection $2 $3  }
->       | '(' qopm exp0 ')'             { HsRightSection $2 $3 }
->       | '_'                           { HsWildCard }
+>       | '(' exp0b qop ')'             { LeftSection $2 $3  }
+>       | '(' qopm exp0 ')'             { RightSection $2 $3 }
+>       | '_'                           { WildCard }
 
 > commas :: { Int }
 >       : commas ','                    { $1 + 1 }
 >       | ','                           { 1 }
 
-> texps :: { [HsExp] }
+> texps :: { [Exp] }
 >       : texps ',' exp                 { $3 : $1 }
 >       | exp ',' exp                   { [$3,$1] }
 
@@ -603,60 +603,60 @@ List expressions
 The rules below are little bit contorted to keep lexps left-recursive while
 avoiding another shift/reduce-conflict.
 
-> list :: { HsExp }
->       : exp                           { HsList [$1] }
->       | lexps                         { HsList (reverse $1) }
->       | exp '..'                      { HsEnumFrom $1 }
->       | exp ',' exp '..'              { HsEnumFromThen $1 $3 }
->       | exp '..' exp                  { HsEnumFromTo $1 $3 }
->       | exp ',' exp '..' exp          { HsEnumFromThenTo $1 $3 $5 }
->       | exp '|' quals                 { HsListComp $1 (reverse $3) }
+> list :: { Exp }
+>       : exp                           { List [$1] }
+>       | lexps                         { List (reverse $1) }
+>       | exp '..'                      { EnumFrom $1 }
+>       | exp ',' exp '..'              { EnumFromThen $1 $3 }
+>       | exp '..' exp                  { EnumFromTo $1 $3 }
+>       | exp ',' exp '..' exp          { EnumFromThenTo $1 $3 $5 }
+>       | exp '|' quals                 { ListComp $1 (reverse $3) }
 
-> lexps :: { [HsExp] }
+> lexps :: { [Exp] }
 >       : lexps ',' exp                 { $3 : $1 }
 >       | exp ',' exp                   { [$3,$1] }
 
 -----------------------------------------------------------------------------
 List comprehensions
 
-> quals :: { [HsStmt] }
+> quals :: { [Stmt] }
 >       : quals ',' qual                { $3 : $1 }
 >       | qual                          { [$1] }
 
-> qual  :: { HsStmt }
->       : pat srcloc '<-' exp           { HsGenerator $2 $1 $4 }
->       | exp                           { HsQualifier $1 }
->       | 'let' decllist                { HsLetStmt $2 }
+> qual  :: { Stmt }
+>       : pat srcloc '<-' exp           { Generator $2 $1 $4 }
+>       | exp                           { Qualifier $1 }
+>       | 'let' decllist                { LetStmt $2 }
 
 -----------------------------------------------------------------------------
 Case alternatives
 
-> altslist :: { [HsAlt] }
+> altslist :: { [Alt] }
 >       : '{'  alts '}'                 { $2 }
 >       | open alts close               { $2 }
 
-> alts :: { [HsAlt] }
+> alts :: { [Alt] }
 >       : optsemis alts1 optsemis       { reverse $2 }
 
-> alts1 :: { [HsAlt] }
+> alts1 :: { [Alt] }
 >       : alts1 semis alt               { $3 : $1 }
 >       | alt                           { [$1] }
 
-> alt :: { HsAlt }
->       : srcloc pat ralt optwhere      { HsAlt $1 $2 $3 $4 }
+> alt :: { Alt }
+>       : srcloc pat ralt optwhere      { Alt $1 $2 $3 $4 }
 
-> ralt :: { HsGuardedAlts }
->       : '->' exp                      { HsUnGuardedAlt $2 }
->       | gdpats                        { HsGuardedAlts (reverse $1) }
+> ralt :: { GuardedAlts }
+>       : '->' exp                      { UnGuardedAlt $2 }
+>       | gdpats                        { GuardedAlts (reverse $1) }
 
-> gdpats :: { [HsGuardedAlt] }
+> gdpats :: { [GuardedAlt] }
 >       : gdpats gdpat                  { $2 : $1 }
 >       | gdpat                         { [$1] }
 
-> gdpat :: { HsGuardedAlt }
->       : srcloc '|' exp0 '->' exp      { HsGuardedAlt $1 $3 $5 }
+> gdpat :: { GuardedAlt }
+>       : srcloc '|' exp0 '->' exp      { GuardedAlt $1 $3 $5 }
 
-> pat :: { HsPat }
+> pat :: { Pat }
 >       : exp0b                         {% checkPattern $1 }
 
 -----------------------------------------------------------------------------
@@ -666,144 +666,144 @@ As per the Report, but with stmt expanded to simplify building the list
 without introducing conflicts.  This also ensures that the last stmt is
 an expression.
 
-> stmtlist :: { [HsStmt] }
+> stmtlist :: { [Stmt] }
 >       : '{'  stmts '}'                { $2 }
 >       | open stmts close              { $2 }
 
-> stmts :: { [HsStmt] }
->       : 'let' decllist ';' stmts      { HsLetStmt $2 : $4 }
->       | pat srcloc '<-' exp ';' stmts { HsGenerator $2 $1 $4 : $6 }
->       | exp ';' stmts                 { HsQualifier $1 : $3 }
+> stmts :: { [Stmt] }
+>       : 'let' decllist ';' stmts      { LetStmt $2 : $4 }
+>       | pat srcloc '<-' exp ';' stmts { Generator $2 $1 $4 : $6 }
+>       | exp ';' stmts                 { Qualifier $1 : $3 }
 >       | ';' stmts                     { $2 }
->       | exp ';'                       { [HsQualifier $1] }
->       | exp                           { [HsQualifier $1] }
+>       | exp ';'                       { [Qualifier $1] }
+>       | exp                           { [Qualifier $1] }
 
 -----------------------------------------------------------------------------
 Record Field Update/Construction
 
-> fbinds :: { [HsFieldUpdate] }
+> fbinds :: { [FieldUpdate] }
 >       : fbinds ',' fbind              { $3 : $1 }
 >       | fbind                         { [$1] }
 
-> fbind :: { HsFieldUpdate }
->       : qvar '=' exp                  { HsFieldUpdate $1 $3 }
+> fbind :: { FieldUpdate }
+>       : qvar '=' exp                  { FieldUpdate $1 $3 }
 
 -----------------------------------------------------------------------------
 Variables, Constructors and Operators.
 
-> gcon :: { HsExp }
+> gcon :: { Exp }
 >       : '(' ')'               { unit_con }
->       | '[' ']'               { HsList [] }
+>       | '[' ']'               { List [] }
 >       | '(' commas ')'        { tuple_con $2 }
->       | qcon                  { HsCon $1 }
+>       | qcon                  { Con $1 }
 
-> var   :: { HsName }
+> var   :: { Name }
 >       : varid                 { $1 }
 >       | '(' varsym ')'        { $2 }
 
-> qvar  :: { HsQName }
+> qvar  :: { QName }
 >       : qvarid                { $1 }
 >       | '(' qvarsym ')'       { $2 }
 
-> con   :: { HsName }
+> con   :: { Name }
 >       : conid                 { $1 }
 >       | '(' consym ')'        { $2 }
 
-> qcon  :: { HsQName }
+> qcon  :: { QName }
 >       : qconid                { $1 }
 >       | '(' gconsym ')'       { $2 }
 
-> varop :: { HsName }
+> varop :: { Name }
 >       : varsym                { $1 }
 >       | '`' varid '`'         { $2 }
 
-> qvarop :: { HsQName }
+> qvarop :: { QName }
 >       : qvarsym               { $1 }
 >       | '`' qvarid '`'        { $2 }
 
-> qvaropm :: { HsQName }
+> qvaropm :: { QName }
 >       : qvarsymm              { $1 }
 >       | '`' qvarid '`'        { $2 }
 
-> conop :: { HsName }
+> conop :: { Name }
 >       : consym                { $1 }
 >       | '`' conid '`'         { $2 }
 
-> qconop :: { HsQName }
+> qconop :: { QName }
 >       : gconsym               { $1 }
 >       | '`' qconid '`'        { $2 }
 
-> op    :: { HsOp }
->       : varop                 { HsVarOp $1 }
->       | conop                 { HsConOp $1 }
+> op    :: { Op }
+>       : varop                 { VarOp $1 }
+>       | conop                 { ConOp $1 }
 
-> qop   :: { HsQOp }
->       : qvarop                { HsQVarOp $1 }
->       | qconop                { HsQConOp $1 }
+> qop   :: { QOp }
+>       : qvarop                { QVarOp $1 }
+>       | qconop                { QConOp $1 }
 
-> qopm  :: { HsQOp }
->       : qvaropm               { HsQVarOp $1 }
->       | qconop                { HsQConOp $1 }
+> qopm  :: { QOp }
+>       : qvaropm               { QVarOp $1 }
+>       | qconop                { QConOp $1 }
 
-> gconsym :: { HsQName }
+> gconsym :: { QName }
 >       : ':'                   { list_cons_name }
 >       | qconsym               { $1 }
 
 -----------------------------------------------------------------------------
 Identifiers and Symbols
 
-> qvarid :: { HsQName }
+> qvarid :: { QName }
 >       : varid                 { UnQual $1 }
->       | QVARID                { Qual (Module (fst $1)) (HsIdent (snd $1)) }
+>       | QVARID                { Qual (ModuleName (fst $1)) (Ident (snd $1)) }
 
-> varid :: { HsName }
->       : VARID                 { HsIdent $1 }
->       | 'as'                  { HsIdent "as" }
->       | 'export'              { HsIdent "export" }
->       | 'hiding'              { HsIdent "hiding" }
->       | 'qualified'           { HsIdent "qualified" }
->       | 'safe'                { HsIdent "safe" }
->       | 'unsafe'              { HsIdent "unsafe" }
+> varid :: { Name }
+>       : VARID                 { Ident $1 }
+>       | 'as'                  { Ident "as" }
+>       | 'export'              { Ident "export" }
+>       | 'hiding'              { Ident "hiding" }
+>       | 'qualified'           { Ident "qualified" }
+>       | 'safe'                { Ident "safe" }
+>       | 'unsafe'              { Ident "unsafe" }
 
-> qconid :: { HsQName }
+> qconid :: { QName }
 >       : conid                 { UnQual $1 }
->       | QCONID                { Qual (Module (fst $1)) (HsIdent (snd $1)) }
+>       | QCONID                { Qual (ModuleName (fst $1)) (Ident (snd $1)) }
 
-> conid :: { HsName }
->       : CONID                 { HsIdent $1 }
+> conid :: { Name }
+>       : CONID                 { Ident $1 }
 
-> qconsym :: { HsQName }
+> qconsym :: { QName }
 >       : consym                { UnQual $1 }
->       | QCONSYM               { Qual (Module (fst $1)) (HsSymbol (snd $1)) }
+>       | QCONSYM               { Qual (ModuleName (fst $1)) (Symbol (snd $1)) }
 
-> consym :: { HsName }
->       : CONSYM                { HsSymbol $1 }
+> consym :: { Name }
+>       : CONSYM                { Symbol $1 }
 
-> qvarsym :: { HsQName }
+> qvarsym :: { QName }
 >       : varsym                { UnQual $1 }
 >       | qvarsym1              { $1 }
 
-> qvarsymm :: { HsQName }
+> qvarsymm :: { QName }
 >       : varsymm               { UnQual $1 }
 >       | qvarsym1              { $1 }
 
-> varsym :: { HsName }
->       : VARSYM                { HsSymbol $1 }
->       | '-'                   { HsSymbol "-" }
->       | '!'                   { HsSymbol "!" }
+> varsym :: { Name }
+>       : VARSYM                { Symbol $1 }
+>       | '-'                   { Symbol "-" }
+>       | '!'                   { Symbol "!" }
 
-> varsymm :: { HsName } -- varsym not including '-'
->       : VARSYM                { HsSymbol $1 }
->       | '!'                   { HsSymbol "!" }
+> varsymm :: { Name } -- varsym not including '-'
+>       : VARSYM                { Symbol $1 }
+>       | '!'                   { Symbol "!" }
 
-> qvarsym1 :: { HsQName }
->       : QVARSYM               { Qual (Module (fst $1)) (HsSymbol (snd $1)) }
+> qvarsym1 :: { QName }
+>       : QVARSYM               { Qual (ModuleName (fst $1)) (Symbol (snd $1)) }
 
-> literal :: { HsLiteral }
->       : INT                   { HsInt $1 }
->       | CHAR                  { HsChar $1 }
->       | RATIONAL              { HsFrac $1 }
->       | STRING                { HsString $1 }
+> literal :: { Literal }
+>       : INT                   { Int $1 }
+>       | CHAR                  { Char $1 }
+>       | RATIONAL              { Frac $1 }
+>       | STRING                { String $1 }
 
 > srcloc :: { SrcLoc }  :       {% getSrcLoc }
 
@@ -819,23 +819,23 @@ Layout
 -----------------------------------------------------------------------------
 Miscellaneous (mostly renamings)
 
-> modid :: { Module }
->       : CONID                 { Module $1 }
->       | QCONID                { Module (fst $1 ++ '.':snd $1) }
+> modid :: { ModuleName }
+>       : CONID                 { ModuleName $1 }
+>       | QCONID                { ModuleName (fst $1 ++ '.':snd $1) }
 
-> tyconorcls :: { HsName }
+> tyconorcls :: { Name }
 >       : conid                 { $1 }
 
-> tycon :: { HsName }
+> tycon :: { Name }
 >       : conid                 { $1 }
 
-> qtyconorcls :: { HsQName }
+> qtyconorcls :: { QName }
 >       : qconid                { $1 }
 
-> qtycls :: { HsQName }
+> qtycls :: { QName }
 >       : qconid                { $1 }
 
-> tyvar :: { HsName }
+> tyvar :: { Name }
 >       : varid                 { $1 }
 
 -----------------------------------------------------------------------------
@@ -845,10 +845,10 @@ Miscellaneous (mostly renamings)
 > happyError = fail "Parse error"
 
 > -- | Parse of a string, which should contain a complete Haskell 98 module.
-> parseModule :: String -> ParseResult HsModule
+> parseModule :: String -> ParseResult Module
 > parseModule = runParser parse
 
 > -- | Parse of a string, which should contain a complete Haskell 98 module.
-> parseModuleWithMode :: ParseMode -> String -> ParseResult HsModule
+> parseModuleWithMode :: ParseMode -> String -> ParseResult Module
 > parseModuleWithMode mode = runParserWithMode mode parse
 > }

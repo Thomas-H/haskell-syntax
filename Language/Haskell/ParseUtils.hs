@@ -13,39 +13,39 @@
 -----------------------------------------------------------------------------
 
 module Language.Haskell.ParseUtils (
-          splitTyConApp         -- HsType -> P (HsName,[HsType])
-        , mkRecConstrOrUpdate   -- HsExp -> [HsFieldUpdate] -> P HsExp
+          splitTyConApp         -- Type -> P (Name,[Type])
+        , mkRecConstrOrUpdate   -- Exp -> [FieldUpdate] -> P Exp
         , checkPrec             -- Integer -> P Int
-        , checkContext          -- HsType -> P HsContext
-        , checkAssertion        -- HsType -> P HsAsst
-        , checkDataHeader       -- HsQualType -> P (HsContext,HsName,[HsName])
-        , checkClassHeader      -- HsQualType -> P (HsContext,HsName,[HsName])
-        , checkInstHeader       -- HsQualType -> P (HsContext,HsQName,[HsType])
-        , checkPattern          -- HsExp -> P HsPat
-        , checkExpr             -- HsExp -> P HsExp
-        , checkValDef           -- SrcLoc -> HsExp -> HsRhs -> [HsDecl] -> P HsDecl
-        , checkClassBody        -- [HsDecl] -> P [HsDecl]
-        , checkUnQual           -- HsQName -> P HsName
-        , checkRevDecls         -- [HsDecl] -> P [HsDecl]
+        , checkContext          -- Type -> P Context
+        , checkAssertion        -- Type -> P Asst
+        , checkDataHeader       -- QualType -> P (Context,Name,[Name])
+        , checkClassHeader      -- QualType -> P (Context,Name,[Name])
+        , checkInstHeader       -- QualType -> P (Context,QName,[Type])
+        , checkPattern          -- Exp -> P Pat
+        , checkExpr             -- Exp -> P Exp
+        , checkValDef           -- SrcLoc -> Exp -> Rhs -> [Decl] -> P Decl
+        , checkClassBody        -- [Decl] -> P [Decl]
+        , checkUnQual           -- QName -> P Name
+        , checkRevDecls         -- [Decl] -> P [Decl]
  ) where
 
 import           Language.Haskell.ParseMonad
 import           Language.Haskell.Pretty
 import           Language.Haskell.Syntax
 
-splitTyConApp :: HsType -> P (HsName,[HsType])
+splitTyConApp :: Type -> P (Name,[Type])
 splitTyConApp t0 = split t0 []
  where
-        split :: HsType -> [HsType] -> P (HsName,[HsType])
-        split (HsTyApp t u) ts = split t (u:ts)
-        split (HsTyCon (UnQual t)) ts = return (t,ts)
+        split :: Type -> [Type] -> P (Name,[Type])
+        split (TyApp t u) ts = split t (u:ts)
+        split (TyCon (UnQual t)) ts = return (t,ts)
         split _ _ = fail "Illegal data/newtype declaration"
 
 -----------------------------------------------------------------------------
 -- Various Syntactic Checks
 
-checkContext :: HsType -> P HsContext
-checkContext (HsTyTuple ts) =
+checkContext :: Type -> P Context
+checkContext (TyTuple ts) =
         mapM checkAssertion ts
 checkContext t = do
         c <- checkAssertion t
@@ -53,36 +53,36 @@ checkContext t = do
 
 -- Changed for multi-parameter type classes
 
-checkAssertion :: HsType -> P HsAsst
+checkAssertion :: Type -> P Asst
 checkAssertion = checkAssertion' []
-        where   checkAssertion' ts (HsTyCon c) = return (c,ts)
-                checkAssertion' ts (HsTyApp a t) = checkAssertion' (t:ts) a
+        where   checkAssertion' ts (TyCon c) = return (c,ts)
+                checkAssertion' ts (TyApp a t) = checkAssertion' (t:ts) a
                 checkAssertion' _ _ = fail "Illegal class assertion"
 
 
-checkDataHeader :: HsQualType -> P (HsContext,HsName,[HsName])
-checkDataHeader (HsQualType cs t) = do
+checkDataHeader :: QualType -> P (Context,Name,[Name])
+checkDataHeader (QualType cs t) = do
         (c,ts) <- checkSimple "data/newtype" t []
         return (cs,c,ts)
 
-checkClassHeader :: HsQualType -> P (HsContext,HsName,[HsName])
-checkClassHeader (HsQualType cs t) = do
+checkClassHeader :: QualType -> P (Context,Name,[Name])
+checkClassHeader (QualType cs t) = do
         (c,ts) <- checkSimple "class" t []
         return (cs,c,ts)
 
-checkSimple :: String -> HsType -> [HsName] -> P ((HsName,[HsName]))
-checkSimple kw (HsTyApp l (HsTyVar a)) xs = checkSimple kw l (a:xs)
-checkSimple _kw (HsTyCon (UnQual t))   xs = return (t,xs)
+checkSimple :: String -> Type -> [Name] -> P ((Name,[Name]))
+checkSimple kw (TyApp l (TyVar a)) xs = checkSimple kw l (a:xs)
+checkSimple _kw (TyCon (UnQual t))   xs = return (t,xs)
 checkSimple kw _ _ = fail ("Illegal " ++ kw ++ " declaration")
 
-checkInstHeader :: HsQualType -> P (HsContext,HsQName,[HsType])
-checkInstHeader (HsQualType cs t) = do
+checkInstHeader :: QualType -> P (Context,QName,[Type])
+checkInstHeader (QualType cs t) = do
         (c,ts) <- checkInsts t []
         return (cs,c,ts)
 
-checkInsts :: HsType -> [HsType] -> P ((HsQName,[HsType]))
-checkInsts (HsTyApp l t) ts = checkInsts l (t:ts)
-checkInsts (HsTyCon c)   ts = return (c,ts)
+checkInsts :: Type -> [Type] -> P ((QName,[Type]))
+checkInsts (TyApp l t) ts = checkInsts l (t:ts)
+checkInsts (TyCon c)   ts = return (c,ts)
 checkInsts _ _              = fail "Illegal instance declaration"
 
 -----------------------------------------------------------------------------
@@ -91,51 +91,51 @@ checkInsts _ _              = fail "Illegal instance declaration"
 -- We parse patterns as expressions and check for valid patterns below,
 -- converting the expression into a pattern at the same time.
 
-checkPattern :: HsExp -> P HsPat
+checkPattern :: Exp -> P Pat
 checkPattern e = checkPat e []
 
-checkPat :: HsExp -> [HsPat] -> P HsPat
-checkPat (HsCon c) args = return (HsPApp c args)
-checkPat (HsApp f x) args = do
+checkPat :: Exp -> [Pat] -> P Pat
+checkPat (Con c) args = return (PApp c args)
+checkPat (App f x) args = do
         x' <- checkPat x []
         checkPat f (x':args)
 checkPat e [] = case e of
-        HsVar (UnQual x)   -> return (HsPVar x)
-        HsLit l            -> return (HsPLit l)
-        HsInfixApp l op r  -> do
+        Var (UnQual x)     -> return (PVar x)
+        Lit l              -> return (PLit l)
+        InfixApp l op r    -> do
                               l' <- checkPat l []
                               r' <- checkPat r []
                               case op of
-                                 HsQConOp c -> return (HsPInfixApp l' c r')
+                                 QConOp c -> return (PInfixApp l' c r')
                                  _          -> patFail
-        HsTuple es         -> do
+        Tuple es           -> do
                               ps <- mapM (\e' -> checkPat e' []) es
-                              return (HsPTuple ps)
-        HsList es          -> do
+                              return (PTuple ps)
+        List es            -> do
                               ps <- mapM (\e' -> checkPat e' []) es
-                              return (HsPList ps)
-        HsParen e'         -> do
+                              return (PList ps)
+        Paren e'           -> do
                               p <- checkPat e' []
-                              return (HsPParen p)
-        HsAsPat n e'       -> do
+                              return (PParen p)
+        AsPat n e'         -> do
                               p <- checkPat e' []
-                              return (HsPAsPat n p)
-        HsWildCard         -> return HsPWildCard
-        HsIrrPat e'        -> do
+                              return (PAsPat n p)
+        WildCard           -> return PWildCard
+        IrrPat e'          -> do
                               p <- checkPat e' []
-                              return (HsPIrrPat p)
-        HsRecConstr c fs   -> do
+                              return (PIrrPat p)
+        RecConstr c fs     -> do
                               fs' <- mapM checkPatField fs
-                              return (HsPRec c fs')
-        HsNegApp (HsLit l) -> return (HsPNeg (HsPLit l))
+                              return (PRec c fs')
+        NegApp (Lit l)     -> return (PNeg (PLit l))
         _ -> patFail
 
 checkPat _ _ = patFail
 
-checkPatField :: HsFieldUpdate -> P HsPatField
-checkPatField (HsFieldUpdate n e) = do
+checkPatField :: FieldUpdate -> P PatField
+checkPatField (FieldUpdate n e) = do
         p <- checkPat e []
-        return (HsPFieldPat n p)
+        return (PFieldPat n p)
 
 patFail :: P a
 patFail = fail "Parse error in pattern"
@@ -143,128 +143,128 @@ patFail = fail "Parse error in pattern"
 -----------------------------------------------------------------------------
 -- Check Expression Syntax
 
-checkExpr :: HsExp -> P HsExp
+checkExpr :: Exp -> P Exp
 checkExpr e = case e of
-        HsVar _                   -> return e
-        HsCon _                   -> return e
-        HsLit _                   -> return e
-        HsInfixApp e1 op e2       -> check2Exprs e1 e2 (flip HsInfixApp op)
-        HsApp e1 e2               -> check2Exprs e1 e2 HsApp
-        HsNegApp e1               -> check1Expr e1 HsNegApp
-        HsLambda loc ps e1        -> check1Expr e1 (HsLambda loc ps)
-        HsLet bs e1               -> check1Expr e1 (HsLet bs)
-        HsIf e1 e2 e3             -> check3Exprs e1 e2 e3 HsIf
-        HsCase e1 alts            -> do
-                                     alts' <- mapM checkAlt alts
-                                     e1' <- checkExpr e1
-                                     return (HsCase e1' alts')
-        HsDo stmts                -> do
-                                     stmts' <- mapM checkStmt stmts
-                                     return (HsDo stmts')
-        HsTuple es                -> checkManyExprs es HsTuple
-        HsList es                 -> checkManyExprs es HsList
-        HsParen e1                -> check1Expr e1 HsParen
-        HsLeftSection e1 op       -> check1Expr e1 (flip HsLeftSection op)
-        HsRightSection op e1      -> check1Expr e1 (HsRightSection op)
-        HsRecConstr c fields      -> do
-                                     fields' <- mapM checkField fields
-                                     return (HsRecConstr c fields')
-        HsRecUpdate e1 fields     -> do
-                                     fields' <- mapM checkField fields
-                                     e1' <- checkExpr e1
-                                     return (HsRecUpdate e1' fields')
-        HsEnumFrom e1             -> check1Expr e1 HsEnumFrom
-        HsEnumFromTo e1 e2        -> check2Exprs e1 e2 HsEnumFromTo
-        HsEnumFromThen e1 e2      -> check2Exprs e1 e2 HsEnumFromThen
-        HsEnumFromThenTo e1 e2 e3 -> check3Exprs e1 e2 e3 HsEnumFromThenTo
-        HsListComp e1 stmts       -> do
-                                     stmts' <- mapM checkStmt stmts
-                                     e1' <- checkExpr e1
-                                     return (HsListComp e1' stmts')
-        HsExpTypeSig loc e1 ty    -> do
-                                     e1' <- checkExpr e1
-                                     return (HsExpTypeSig loc e1' ty)
-        _                         -> fail "Parse error in expression"
+        Var _                   -> return e
+        Con _                   -> return e
+        Lit _                   -> return e
+        InfixApp e1 op e2       -> check2Exprs e1 e2 (flip InfixApp op)
+        App e1 e2               -> check2Exprs e1 e2 App
+        NegApp e1               -> check1Expr e1 NegApp
+        Lambda loc ps e1        -> check1Expr e1 (Lambda loc ps)
+        Let bs e1               -> check1Expr e1 (Let bs)
+        If e1 e2 e3             -> check3Exprs e1 e2 e3 If
+        Case e1 alts            -> do
+                                   alts' <- mapM checkAlt alts
+                                   e1' <- checkExpr e1
+                                   return (Case e1' alts')
+        Do stmts                -> do
+                                   stmts' <- mapM checkStmt stmts
+                                   return (Do stmts')
+        Tuple es                -> checkManyExprs es Tuple
+        List es                 -> checkManyExprs es List
+        Paren e1                -> check1Expr e1 Paren
+        LeftSection e1 op       -> check1Expr e1 (flip LeftSection op)
+        RightSection op e1      -> check1Expr e1 (RightSection op)
+        RecConstr c fields      -> do
+                                   fields' <- mapM checkField fields
+                                   return (RecConstr c fields')
+        RecUpdate e1 fields     -> do
+                                   fields' <- mapM checkField fields
+                                   e1' <- checkExpr e1
+                                   return (RecUpdate e1' fields')
+        EnumFrom e1             -> check1Expr e1 EnumFrom
+        EnumFromTo e1 e2        -> check2Exprs e1 e2 EnumFromTo
+        EnumFromThen e1 e2      -> check2Exprs e1 e2 EnumFromThen
+        EnumFromThenTo e1 e2 e3 -> check3Exprs e1 e2 e3 EnumFromThenTo
+        ListComp e1 stmts       -> do
+                                   stmts' <- mapM checkStmt stmts
+                                   e1' <- checkExpr e1
+                                   return (ListComp e1' stmts')
+        ExpTypeSig loc e1 ty    -> do
+                                   e1' <- checkExpr e1
+                                   return (ExpTypeSig loc e1' ty)
+        _                       -> fail "Parse error in expression"
 
 -- type signature for polymorphic recursion!!
-check1Expr :: HsExp -> (HsExp -> a) -> P a
+check1Expr :: Exp -> (Exp -> a) -> P a
 check1Expr e1 f = do
         e1' <- checkExpr e1
         return (f e1')
 
-check2Exprs :: HsExp -> HsExp -> (HsExp -> HsExp -> a) -> P a
+check2Exprs :: Exp -> Exp -> (Exp -> Exp -> a) -> P a
 check2Exprs e1 e2 f = do
         e1' <- checkExpr e1
         e2' <- checkExpr e2
         return (f e1' e2')
 
-check3Exprs :: HsExp -> HsExp -> HsExp -> (HsExp -> HsExp -> HsExp -> a) -> P a
+check3Exprs :: Exp -> Exp -> Exp -> (Exp -> Exp -> Exp -> a) -> P a
 check3Exprs e1 e2 e3 f = do
         e1' <- checkExpr e1
         e2' <- checkExpr e2
         e3' <- checkExpr e3
         return (f e1' e2' e3')
 
-checkManyExprs :: [HsExp] -> ([HsExp] -> a) -> P a
+checkManyExprs :: [Exp] -> ([Exp] -> a) -> P a
 checkManyExprs es f = do
         es' <- mapM checkExpr es
         return (f es')
 
-checkAlt :: HsAlt -> P HsAlt
-checkAlt (HsAlt loc p galts bs) = do
+checkAlt :: Alt -> P Alt
+checkAlt (Alt loc p galts bs) = do
         galts' <- checkGAlts galts
-        return (HsAlt loc p galts' bs)
+        return (Alt loc p galts' bs)
 
-checkGAlts :: HsGuardedAlts -> P HsGuardedAlts
-checkGAlts (HsUnGuardedAlt e) = check1Expr e HsUnGuardedAlt
-checkGAlts (HsGuardedAlts galts) = do
+checkGAlts :: GuardedAlts -> P GuardedAlts
+checkGAlts (UnGuardedAlt e) = check1Expr e UnGuardedAlt
+checkGAlts (GuardedAlts galts) = do
         galts' <- mapM checkGAlt galts
-        return (HsGuardedAlts galts')
+        return (GuardedAlts galts')
 
-checkGAlt :: HsGuardedAlt -> P HsGuardedAlt
-checkGAlt (HsGuardedAlt loc e1 e2) = check2Exprs e1 e2 (HsGuardedAlt loc)
+checkGAlt :: GuardedAlt -> P GuardedAlt
+checkGAlt (GuardedAlt loc e1 e2) = check2Exprs e1 e2 (GuardedAlt loc)
 
-checkStmt :: HsStmt -> P HsStmt
-checkStmt (HsGenerator loc p e) = check1Expr e (HsGenerator loc p)
-checkStmt (HsQualifier e)       = check1Expr e HsQualifier
-checkStmt s@(HsLetStmt _)       = return s
+checkStmt :: Stmt -> P Stmt
+checkStmt (Generator loc p e) = check1Expr e (Generator loc p)
+checkStmt (Qualifier e)       = check1Expr e Qualifier
+checkStmt s@(LetStmt _)       = return s
 
-checkField :: HsFieldUpdate -> P HsFieldUpdate
-checkField (HsFieldUpdate n e) = check1Expr e (HsFieldUpdate n)
+checkField :: FieldUpdate -> P FieldUpdate
+checkField (FieldUpdate n e) = check1Expr e (FieldUpdate n)
 
 -----------------------------------------------------------------------------
 -- Check Equation Syntax
 
-checkValDef :: SrcLoc -> HsExp -> HsRhs -> [HsDecl] -> P HsDecl
+checkValDef :: SrcLoc -> Exp -> Rhs -> [Decl] -> P Decl
 checkValDef srcloc lhs rhs whereBinds =
     case isFunLhs lhs [] of
          Just (f,es) -> do
                         ps <- mapM checkPattern es
-                        return (HsFunBind [HsMatch srcloc f ps rhs whereBinds])
+                        return (FunBind [Match srcloc f ps rhs whereBinds])
          Nothing     -> do
                         lhs' <- checkPattern lhs
-                        return (HsPatBind srcloc lhs' rhs whereBinds)
+                        return (PatBind srcloc lhs' rhs whereBinds)
 
--- A variable binding is parsed as an HsPatBind.
+-- A variable binding is parsed as an PatBind.
 
-isFunLhs :: HsExp -> [HsExp] -> Maybe (HsName, [HsExp])
-isFunLhs (HsInfixApp l (HsQVarOp (UnQual op)) r) es = Just (op, l:r:es)
-isFunLhs (HsApp (HsVar (UnQual f)) e) es            = Just (f, e:es)
-isFunLhs (HsApp (HsParen f) e) es                   = isFunLhs f (e:es)
-isFunLhs (HsApp f e) es                             = isFunLhs f (e:es)
-isFunLhs _ _                                        = Nothing
+isFunLhs :: Exp -> [Exp] -> Maybe (Name, [Exp])
+isFunLhs (InfixApp l (QVarOp (UnQual op)) r) es = Just (op, l:r:es)
+isFunLhs (App (Var (UnQual f)) e) es            = Just (f, e:es)
+isFunLhs (App (Paren f) e) es                   = isFunLhs f (e:es)
+isFunLhs (App f e) es                           = isFunLhs f (e:es)
+isFunLhs _ _                                    = Nothing
 
 -----------------------------------------------------------------------------
 -- In a class or instance body, a pattern binding must be of a variable.
 
-checkClassBody :: [HsDecl] -> P [HsDecl]
+checkClassBody :: [Decl] -> P [Decl]
 checkClassBody decls = do
         mapM_ checkMethodDef decls
         return decls
 
-checkMethodDef :: HsDecl -> P ()
-checkMethodDef (HsPatBind _ (HsPVar _) _ _) = return ()
-checkMethodDef (HsPatBind loc _ _ _) =
+checkMethodDef :: Decl -> P ()
+checkMethodDef (PatBind _ (PVar _) _ _) = return ()
+checkMethodDef (PatBind loc _ _ _) =
         fail "illegal method definition" `atSrcLoc` loc
 checkMethodDef _ = return ()
 
@@ -272,7 +272,7 @@ checkMethodDef _ = return ()
 -- Check that an identifier or symbol is unqualified.
 -- For occasions when doing this in the grammar would cause conflicts.
 
-checkUnQual :: HsQName -> P HsName
+checkUnQual :: QName -> P Name
 checkUnQual (Qual _ _)  = fail "Illegal qualified name"
 checkUnQual (UnQual n)  = return n
 checkUnQual (Special _) = fail "Illegal special name"
@@ -284,28 +284,28 @@ checkPrec :: Integer -> P Int
 checkPrec i | 0 <= i && i <= 9 = return (fromInteger i)
 checkPrec i | otherwise        = fail ("Illegal precedence " ++ show i)
 
-mkRecConstrOrUpdate :: HsExp -> [HsFieldUpdate] -> P HsExp
-mkRecConstrOrUpdate (HsCon c) fs       = return (HsRecConstr c fs)
-mkRecConstrOrUpdate e         fs@(_:_) = return (HsRecUpdate e fs)
+mkRecConstrOrUpdate :: Exp -> [FieldUpdate] -> P Exp
+mkRecConstrOrUpdate (Con c) fs         = return (RecConstr c fs)
+mkRecConstrOrUpdate e         fs@(_:_) = return (RecUpdate e fs)
 mkRecConstrOrUpdate _         _        = fail "Empty record update"
 
 -----------------------------------------------------------------------------
--- Reverse a list of declarations, merging adjacent HsFunBinds of the
+-- Reverse a list of declarations, merging adjacent FunBinds of the
 -- same name and checking that their arities match.
 
-checkRevDecls :: [HsDecl] -> P [HsDecl]
+checkRevDecls :: [Decl] -> P [Decl]
 checkRevDecls = mergeFunBinds []
     where
         mergeFunBinds revDs [] = return revDs
-        mergeFunBinds revDs (HsFunBind ms1@(HsMatch _ name ps _ _:_):ds1) =
+        mergeFunBinds revDs (FunBind ms1@(Match _ name ps _ _:_):ds1) =
                 mergeMatches ms1 ds1
             where
                 arity = length ps
-                mergeMatches ms' (HsFunBind ms@(HsMatch loc name' ps' _ _:_):ds)
+                mergeMatches ms' (FunBind ms@(Match loc name' ps' _ _:_):ds)
                     | name' == name =
                         if length ps' /= arity
                         then fail ("arity mismatch for '" ++ prettyPrint name ++ "'")
                              `atSrcLoc` loc
                         else mergeMatches (ms++ms') ds
-                mergeMatches ms' ds = mergeFunBinds (HsFunBind ms':revDs) ds
+                mergeMatches ms' ds = mergeFunBinds (FunBind ms':revDs) ds
         mergeFunBinds revDs (d:ds) = mergeFunBinds (d:revDs) ds
