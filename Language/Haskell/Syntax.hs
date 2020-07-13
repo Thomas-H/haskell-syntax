@@ -65,8 +65,7 @@ module Language.Haskell.Syntax (
 
 
 #ifdef __GLASGOW_HASKELL__
-import           Data.Generics.Basics
-import           Data.Generics.Instances ()
+import Data.Data(Data,Typeable)
 #endif
 
 -- | A position in the source.
