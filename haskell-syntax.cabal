@@ -1,5 +1,5 @@
 cabal-version:  >=1.10
-name:           haskell-src
+name:           haskell-syntax
 -- don't forget to update the changelog.md!
 version:        1.0.3.0
 build-type:     Simple
@@ -7,13 +7,11 @@ build-type:     Simple
 license:        BSD3
 license-file:   LICENSE
 author:         Simon Marlow, Sven Panne and Noel Winstanley
--- Maintained through https://github.com/haskell-pkg-janitors. Join us!
-maintainer:     Herbert Valerio Riedel <hvr@gnu.org>
-bug-reports:    https://github.com/haskell-pkg-janitors/haskell-src/issues
+maintainer:     Thomas Hallgren
 category:       Language
 synopsis:       Support for manipulating Haskell source code
 description:
-    The @haskell-src@ package provides support for manipulating Haskell
+    This package provides support for manipulating Haskell
     source code. The package provides a lexer, parser and
     pretty-printer, and a definition of a Haskell abstract syntax tree
     (AST). Common uses of this package are to parse or generate
