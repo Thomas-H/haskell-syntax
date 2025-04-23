@@ -34,7 +34,7 @@ library
         Language.Haskell.Syntax,
         Language.Haskell.ParseUtils
 
-  build-depends: base    >= 4.3 && < 4.21
+  build-depends: base    >= 4.3 && < 4.22
                , pretty  >= 1.0.1.2 && < 1.2
                , array   >= 0.3 && < 0.6
 
